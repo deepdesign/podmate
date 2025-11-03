@@ -112,6 +112,23 @@ export default function TemplatePicker({ onTemplatesLoaded }: TemplatePickerProp
     const lastTemplateId = getLastUsedTemplateId();
     if (!lastTemplateId) return;
     
+    // Check if template is already loaded in sessionStorage (restored by parent)
+    try {
+      const savedTemplateFromSession = sessionStorage.getItem('podmate_template');
+      if (savedTemplateFromSession) {
+        const parsed = JSON.parse(savedTemplateFromSession);
+        if (parsed.id === lastTemplateId) {
+          // Template already loaded, skip API call
+          setLoadedTemplates([parsed]);
+          onTemplatesLoaded([parsed], false); // Don't auto-advance on initial load
+          setSelectedSavedTemplateId('');
+          return;
+        }
+      }
+    } catch (err) {
+      // If parsing fails, continue with normal load
+    }
+    
     // Try to find it in saved templates first
     const savedTemplate = getSavedTemplates().find(t => t.id === lastTemplateId);
     if (savedTemplate) {

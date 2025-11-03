@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import TemplatePicker from '../components/TemplatePicker';
 import FileBrowser from '../components/FileBrowser';
 import ImageVariantSelection from '../components/ImageVariantSelection';
@@ -36,20 +36,268 @@ export default function Home() {
     total: number;
     currentImageName: string | null;
   } | null>(null);
+  
+  // Track if URL params have been processed to prevent resetting during active workflow
+  const urlParamsProcessedRef = useRef(false);
+  const skipRestoreRef = useRef(false); // Track if we should skip restoring state (e.g., after Start New)
+
+  // Track if we've already restored state to prevent multiple restorations
+  const hasRestoredRef = useRef(false);
+
+  // Restore state from sessionStorage on mount
+  useEffect(() => {
+    // Only restore once on initial mount, and skip if explicitly requested
+    if (skipRestoreRef.current || hasRestoredRef.current) {
+      skipRestoreRef.current = false;
+      return;
+    }
+    
+    hasRestoredRef.current = true;
+    
+    // Use a function to check current state at execution time, not closure time
+    setCurrentStep(current => {
+      try {
+        // First check if there's queue progress - if so, go to step 6
+        const savedQueue = sessionStorage.getItem('podmate_queue');
+        if (savedQueue) {
+          try {
+            const parsedQueue = JSON.parse(savedQueue);
+            if (Array.isArray(parsedQueue) && parsedQueue.length > 0) {
+              // If queue has items (especially items that are not all complete), we should be on step 6
+              const hasInProgressItems = parsedQueue.some((item: any) => 
+                item.status === 'submitted' || 
+                item.status === 'uploading' || 
+                (item.productId && item.status !== 'complete' && item.status !== 'error')
+              );
+              // If there are any in-progress items OR if all are complete (showing success state), go to step 6
+              if (hasInProgressItems || parsedQueue.length > 0) {
+                console.log('Restoring to step 6 due to queue progress');
+                return 6;
+              }
+            }
+          } catch (err) {
+            console.error('Failed to parse saved queue:', err);
+          }
+        }
+        
+        // Otherwise, restore the saved step if we're on step 1
+        const savedStep = sessionStorage.getItem('podmate_currentStep');
+        if (savedStep && current === 1) {
+          // Only restore step if we're still on step 1 (initial state)
+          const stepNum = parseInt(savedStep, 10);
+          if (stepNum >= 1 && stepNum <= STEPS.length) {
+            return stepNum;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore currentStep:', err);
+      }
+      return current;
+    });
+    
+    setTemplate(current => {
+      try {
+        const savedTemplate = sessionStorage.getItem('podmate_template');
+        if (savedTemplate && !current) {
+          return JSON.parse(savedTemplate);
+        }
+      } catch (err) {
+        console.error('Failed to restore template:', err);
+      }
+      return current;
+    });
+    
+    setImages(current => {
+      try {
+        const savedImages = sessionStorage.getItem('podmate_images');
+        if (savedImages && current.length === 0) {
+          const parsedImages = JSON.parse(savedImages);
+          // Don't restore File objects as they can't be serialized
+          return parsedImages.map((img: any) => ({
+            ...img,
+            file: undefined, // File objects can't be restored
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to restore images:', err);
+      }
+      return current;
+    });
+    
+    setSelectedVariants(current => {
+      try {
+        const savedVariants = sessionStorage.getItem('podmate_selectedVariants');
+        if (savedVariants && current.size === 0) {
+          const parsedVariants = JSON.parse(savedVariants);
+          return new Map(parsedVariants);
+        }
+      } catch (err) {
+        console.error('Failed to restore selectedVariants:', err);
+      }
+      return current;
+    });
+    
+    setMetadata(current => {
+      try {
+        const savedMetadata = sessionStorage.getItem('podmate_metadata');
+        if (savedMetadata && Object.keys(current).length === 0) {
+          return JSON.parse(savedMetadata);
+        }
+      } catch (err) {
+        console.error('Failed to restore metadata:', err);
+      }
+      return current;
+    });
+  }, []); // Only run on mount
+
+  // Auto-select all variants for all images when template is available
+  useEffect(() => {
+    if (template && template.variants.length > 0 && images.length > 0) {
+      setSelectedVariants(prev => {
+        const newMap = new Map(prev);
+        let hasChanges = false;
+        
+        // Ensure all images have all variants selected
+        images.forEach(img => {
+          const current = newMap.get(img.fileId) || [];
+          const allVariantIds = template.variants.map(v => v.id);
+          
+          // Check if this image is missing any variants
+          const missingVariants = allVariantIds.filter(id => !current.includes(id));
+          
+          if (missingVariants.length > 0) {
+            // Add missing variants
+            newMap.set(img.fileId, [...current, ...missingVariants]);
+            hasChanges = true;
+          } else if (current.length === 0) {
+            // If image has no variants selected, select all
+            newMap.set(img.fileId, allVariantIds);
+            hasChanges = true;
+          }
+        });
+        
+        return hasChanges ? newMap : prev;
+      });
+    }
+  }, [template, images]); // Run when template or images change
+
+  // Persist state to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('podmate_currentStep', currentStep.toString());
+    } catch (err) {
+      console.error('Failed to save currentStep:', err);
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
+    try {
+      if (template) {
+        sessionStorage.setItem('podmate_template', JSON.stringify(template));
+      } else {
+        sessionStorage.removeItem('podmate_template');
+      }
+    } catch (err) {
+      console.error('Failed to save template:', err);
+    }
+  }, [template]);
+
+  useEffect(() => {
+    try {
+      if (images.length > 0) {
+        // Don't save File objects as they can't be serialized
+        // Store only essential fields to minimize storage
+        const imagesToSave = images.map(img => ({
+          fileId: img.fileId,
+          publicUrl: img.publicUrl,
+          thumbnailUrl: img.thumbnailUrl,
+          originalName: img.originalName,
+          sourceType: img.sourceType,
+          // Skip file object
+        }));
+        
+        const imagesData = JSON.stringify(imagesToSave);
+        
+        // Check if data is too large
+        if (imagesData.length > 4 * 1024 * 1024) { // 4MB warning threshold
+          console.warn('Images data is large, may exceed sessionStorage limits:', imagesData.length, 'bytes');
+        }
+        
+        sessionStorage.setItem('podmate_images', imagesData);
+      } else {
+        sessionStorage.removeItem('podmate_images');
+      }
+    } catch (err) {
+      // Handle quota exceeded error
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        console.error('SessionStorage quota exceeded. Images not saved. Consider using fewer images or cloud storage.');
+        // Try to save minimal version (just fileIds)
+        try {
+          const minimalImages = images.map(img => ({
+            fileId: img.fileId,
+            originalName: img.originalName,
+            sourceType: img.sourceType,
+          }));
+          sessionStorage.setItem('podmate_images', JSON.stringify(minimalImages));
+          console.warn('Saved minimal image data (without URLs). URLs will need to be refreshed.');
+        } catch (minimalErr) {
+          console.error('Failed to save even minimal image data:', minimalErr);
+        }
+      } else {
+        console.error('Failed to save images:', err);
+      }
+    }
+  }, [images]);
+
+  useEffect(() => {
+    try {
+      if (selectedVariants.size > 0) {
+        sessionStorage.setItem('podmate_selectedVariants', JSON.stringify(Array.from(selectedVariants.entries())));
+      } else {
+        sessionStorage.removeItem('podmate_selectedVariants');
+      }
+    } catch (err) {
+      console.error('Failed to save selectedVariants:', err);
+    }
+  }, [selectedVariants]);
+
+  useEffect(() => {
+    try {
+      if (Object.keys(metadata).length > 0) {
+        sessionStorage.setItem('podmate_metadata', JSON.stringify(metadata));
+      } else {
+        sessionStorage.removeItem('podmate_metadata');
+      }
+    } catch (err) {
+      console.error('Failed to save metadata:', err);
+    }
+  }, [metadata]);
 
   // Handle OAuth callbacks from Dropbox and Google Drive, and URL parameters for navigation
   useEffect(() => {
+    // Only process URL params once on initial mount
+    if (urlParamsProcessedRef.current) {
+      return;
+    }
+    urlParamsProcessedRef.current = true;
+    
     const params = new URLSearchParams(window.location.search);
     const credentials = getCloudCredentials();
     let updatedCredentials = { ...credentials };
     let urlCleaned = false;
     
     // Check for step parameter (for navigation from Settings)
+    // Only use URL step if we're starting fresh (no template/images loaded yet)
+    // This prevents URL params from resetting an active workflow
     const stepParam = params.get('step');
     if (stepParam) {
       const stepNum = parseInt(stepParam, 10);
       if (stepNum >= 1 && stepNum <= STEPS.length) {
-        setCurrentStep(stepNum);
+        // Only set step from URL if we don't have template/images (fresh start)
+        // This prevents resetting when user is already in a workflow
+        if (!template && images.length === 0) {
+          setCurrentStep(stepNum);
+        }
         urlCleaned = true;
       }
     }
@@ -72,7 +320,10 @@ export default function Home() {
           dropboxTokenExpiry: expiryTime,
         };
         // Navigate to Step 2 (Upload artwork) after successful Dropbox connection
-        setCurrentStep(2);
+        // Only if we're on step 1 (don't reset if user is further along)
+        if (currentStep === 1) {
+          setCurrentStep(2);
+        }
         urlCleaned = true;
       }
     }
@@ -95,7 +346,10 @@ export default function Home() {
           googleDriveTokenExpiry: expiryTime,
         };
         // Navigate to Step 2 (Upload artwork) after successful Google Drive connection
-        setCurrentStep(2);
+        // Only if we're on step 1 (don't reset if user is further along)
+        if (currentStep === 1) {
+          setCurrentStep(2);
+        }
         urlCleaned = true;
       }
     }
@@ -142,8 +396,8 @@ export default function Home() {
         newMap.set(img.fileId, loadedTemplates[0].variants.map(v => v.id));
       });
       setSelectedVariants(newMap);
-      // Auto-advance only if explicitly requested (for "Import Templates" flow)
-      if (autoAdvance) {
+      // Auto-advance only if explicitly requested AND we're on step 1 (don't reset if already further along)
+      if (autoAdvance && currentStep === 1) {
         setCurrentStep(2);
       }
     }
@@ -179,13 +433,7 @@ export default function Home() {
         }
       }
       
-      // Show warning if duplicates were skipped
-      if (duplicates.length > 0) {
-        const duplicateCount = duplicates.length;
-        const duplicateNames = duplicates.slice(0, 3).join(', ');
-        const moreText = duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : '';
-        alert(`${duplicateCount} duplicate image${duplicateCount !== 1 ? 's' : ''} skipped: ${duplicateNames}${moreText}`);
-      }
+      // Duplicates are silently skipped
       
       if (uploaded.length > 0) {
         const newImages = [...images, ...uploaded];
@@ -236,13 +484,7 @@ export default function Home() {
       });
     });
 
-    // Show warning if duplicates were skipped
-    if (duplicates.length > 0) {
-      const duplicateCount = duplicates.length;
-      const duplicateNames = duplicates.slice(0, 3).join(', ');
-      const moreText = duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : '';
-      alert(`${duplicateCount} duplicate image${duplicateCount !== 1 ? 's' : ''} skipped: ${duplicateNames}${moreText}`);
-    }
+    // Duplicates are silently skipped
 
     if (uploaded.length > 0) {
       const newImages = [...images, ...uploaded];
@@ -638,6 +880,20 @@ export default function Home() {
       }
     }
 
+    // Clear sessionStorage before resetting
+    try {
+      sessionStorage.removeItem('podmate_currentStep');
+      sessionStorage.removeItem('podmate_template');
+      sessionStorage.removeItem('podmate_images');
+      sessionStorage.removeItem('podmate_selectedVariants');
+      sessionStorage.removeItem('podmate_metadata');
+    } catch (err) {
+      console.error('Failed to clear sessionStorage:', err);
+    }
+
+    // Set flag to skip restoring state
+    skipRestoreRef.current = true;
+
     // Reset all state
     setCurrentStep(1);
     setTemplate(null);
@@ -686,7 +942,7 @@ export default function Home() {
                     type="button"
                     onClick={handleNext}
                     disabled={!template}
-                    className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next →
                   </button>
@@ -727,37 +983,6 @@ export default function Home() {
                   </div>
                   {images.length > 0 && (
                     <div className="mt-4 space-y-2 flex-shrink-0">
-                      <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                        <div className="flex items-start">
-                          <svg className="flex-shrink-0 w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <div className="ml-3 flex-1">
-                            <p className="text-sm font-medium text-green-900 dark:text-green-300 mb-2">
-                              <span className="font-semibold">{images.length}</span> image{images.length !== 1 ? 's' : ''} already uploaded
-                            </p>
-                            <ul className="text-xs text-green-800 dark:text-green-400 space-y-1 list-disc list-inside">
-                              {images.slice(0, 5).map((img) => (
-                                <li key={img.fileId} className="truncate">
-                                  {img.originalName || img.fileId}
-                                </li>
-                              ))}
-                              {images.length > 5 && (
-                                <li className="text-green-600 dark:text-green-500 italic">
-                                  ...and {images.length - 5} more
-                                </li>
-                              )}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                      {images.some(img => img.sourceType === 'dropbox' || img.sourceType === 'googledrive') && (
-                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                          <p className="text-sm text-blue-900 dark:text-blue-300">
-                            <strong>✅ Safe to shutdown:</strong> Using cloud URLs (Dropbox/Google Drive). Gelato will fetch images directly from the cloud. You can close this app after submitting products.
-                          </p>
-                        </div>
-                      )}
                       {images.some(img => !img.sourceType || img.sourceType === 'local') && (
                         <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
                           <p className="text-sm text-yellow-900 dark:text-yellow-300">
@@ -785,22 +1010,39 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={async () => {
-                        await addCloudFilesHandler();
-                        // Auto-advance to next step if we have images and template after adding
-                        if (template && images.length > 0) {
-                          setCurrentStep(3);
+                        try {
+                          setUploading(true);
+                          if (addCloudFilesHandler) {
+                            await addCloudFilesHandler();
+                            // Auto-advance to next step if we have images and template after adding
+                            if (template && images.length > 0) {
+                              setCurrentStep(3);
+                            }
+                          }
+                        } catch (error) {
+                          console.error('Error adding cloud files:', error);
+                          alert(`Failed to add files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        } finally {
+                          setUploading(false);
                         }
                       }}
-                      className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                      disabled={uploading}
+                      className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      Add {selectedCloudFilesCount} File{selectedCloudFilesCount !== 1 ? 's' : ''} →
+                      {uploading && (
+                        <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      )}
+                      {uploading ? `Adding ${selectedCloudFilesCount} file${selectedCloudFilesCount !== 1 ? 's' : ''}...` : `Add ${selectedCloudFilesCount} File${selectedCloudFilesCount !== 1 ? 's' : ''} →`}
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleNext}
                       disabled={images.length === 0}
-                      className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next →
                     </button>
@@ -811,18 +1053,22 @@ export default function Home() {
 
           case 3:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="p-6">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+                <div className="p-6 flex-shrink-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Step 3: Select Variants</h2>
                   {images.length === 0 ? (
                     <p className="text-gray-500">Please upload images first in Step 2.</p>
                   ) : (
-                    <>
-                      <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-md">
-                        <p className="text-sm text-indigo-900 dark:text-indigo-300">
-                          <span className="font-medium">Uploading {images.length} image{images.length !== 1 ? 's' : ''} in total</span>
-                        </p>
-                      </div>
+                    <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-md">
+                      <p className="text-sm text-indigo-900 dark:text-indigo-300">
+                        <span className="font-medium">Uploading {images.length} image{images.length !== 1 ? 's' : ''} in total</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                  {images.length > 0 && (
+                    <div className="flex-1 overflow-auto px-6 pb-6">
                       <ImageVariantSelection
                         template={template!}
                         images={images}
@@ -830,11 +1076,11 @@ export default function Home() {
                         onVariantToggle={handleVariantToggle}
                         onRemoveImage={handleRemoveImage}
                       />
-                    </>
+                    </div>
                   )}
                 </div>
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-                <div className="p-6 flex justify-between items-center">
+                <div className="border-t border-gray-200 dark:border-gray-700 flex-shrink-0"></div>
+                <div className="p-6 flex justify-between items-center flex-shrink-0">
                   <button
                     type="button"
                     onClick={handlePrevious}
@@ -857,7 +1103,7 @@ export default function Home() {
                       });
                       return invalidImages.length > 0;
                     })()}
-                    className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next →
                   </button>
@@ -893,7 +1139,7 @@ export default function Home() {
                     type="button"
                     onClick={handleNext}
                     disabled={!metadata.description}
-                    className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Review →
                   </button>
@@ -903,8 +1149,8 @@ export default function Home() {
 
           case 5:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg max-w-7xl mx-auto">
-                <div className="p-6">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+                <div className="p-6 flex-shrink-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Step 5: Review & Upload to Gelato</h2>
                   
                   {/* Upload Progress - shown while uploading (based on Flowbite progress bar) */}
@@ -967,101 +1213,106 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Show preview table only when there are no results yet */}
-                  {images.length > 0 && results.length === 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Products Preview</h3>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Image
-                              </th>
-                              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Product Title
-                              </th>
-                              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {images.map((image, index) => {
-                              // Generate product title the same way as in createProducts
-                              const rawImageName = (image.originalName || image.fileId).replace(/\.[^/.]+$/, '');
-                              const imageName = toHeadlineCase(rawImageName);
-                              const productTitle = metadata.title 
-                                ? `${metadata.title} - ${imageName}`
-                                : imageName;
-
-                              return (
-                                <tr 
-                                  key={image.fileId} 
-                                  className="hover:bg-gray-50 dark:hover:bg-gray-700"
-                                >
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="flex items-center space-x-3">
-                                      <div className="flex-shrink-0">
-                                        <img
-                                          src={image.thumbnailUrl || image.publicUrl}
-                                          alt={image.originalName || image.fileId}
-                                          className="h-12 w-12 object-cover rounded-md border border-gray-300 dark:border-gray-600"
-                                        />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                          {image.originalName || image.fileId}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <span className="text-sm text-gray-900 dark:text-white">
-                                      {productTitle}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (confirm(`Remove "${image.originalName || image.fileId}" from the upload?`)) {
-                                          handleRemoveImage(image.fileId);
-                                        }
-                                      }}
-                                      className="text-red-700 bg-white border border-red-300 hover:bg-red-50 focus:ring-4 focus:outline-none focus:ring-red-200 font-medium rounded-lg text-sm px-3 py-1.5 dark:bg-gray-800 dark:text-red-400 dark:border-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-300 dark:focus:ring-red-800"
-                                      title="Remove image"
-                                    >
-                                      Remove
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {results.length > 0 && (
-                    <RunSheet 
-                      results={results} 
-                      images={images} 
-                      onRetry={handleRetry}
-                      onStatusUpdate={(index, updatedResult) => {
-                        const newResults = [...results];
-                        newResults[index] = updatedResult;
-                        setResults(newResults);
-                      }}
-                      showExport={true}
-                      templateId={template?.id}
-                    />
-                  )}
                 </div>
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-                <div className="p-6 flex justify-between items-center">
+
+                <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                  <div className="flex-1 overflow-auto px-6 pb-6">
+                    {/* Show preview table only when there are no results yet */}
+                    {images.length > 0 && results.length === 0 && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Products Preview</h3>
+                        <div className="overflow-x-auto overflow-y-auto">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
+                              <tr>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                  Image
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                  Product Title
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                              {images.map((image, index) => {
+                                // Generate product title the same way as in createProducts
+                                const rawImageName = (image.originalName || image.fileId).replace(/\.[^/.]+$/, '');
+                                const imageName = toHeadlineCase(rawImageName);
+                                const productTitle = metadata.title 
+                                  ? `${metadata.title} - ${imageName}`
+                                  : imageName;
+
+                                return (
+                                  <tr 
+                                    key={image.fileId} 
+                                    className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  >
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="flex items-center space-x-3">
+                                        <div className="flex-shrink-0">
+                                          <img
+                                            src={image.thumbnailUrl || image.publicUrl}
+                                            alt={image.originalName || image.fileId}
+                                            className="h-12 w-12 object-cover rounded-md border border-gray-300 dark:border-gray-600"
+                                          />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                            {image.originalName || image.fileId}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <span className="text-sm text-gray-900 dark:text-white">
+                                        {productTitle}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm(`Remove "${image.originalName || image.fileId}" from the upload?`)) {
+                                            handleRemoveImage(image.fileId);
+                                          }
+                                        }}
+                                        className="text-red-700 bg-white border border-red-300 hover:bg-red-50 focus:ring-4 focus:outline-none focus:ring-red-200 font-medium rounded-lg text-sm px-3 py-1.5 dark:bg-gray-800 dark:text-red-400 dark:border-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-300 dark:focus:ring-red-800"
+                                        title="Remove image"
+                                      >
+                                        Remove
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {results.length > 0 && (
+                      <RunSheet 
+                        results={results} 
+                        images={images} 
+                        onRetry={handleRetry}
+                        onStatusUpdate={(index, updatedResult) => {
+                          const newResults = [...results];
+                          newResults[index] = updatedResult;
+                          setResults(newResults);
+                        }}
+                        showExport={true}
+                        templateId={template?.id}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-700 flex-shrink-0"></div>
+                <div className="p-6 flex justify-between items-center flex-shrink-0">
                   <button
                     type="button"
                     onClick={handlePrevious}
@@ -1081,7 +1332,7 @@ export default function Home() {
                     type="button"
                     onClick={handleNext}
                     disabled={images.length === 0 || !metadata.description}
-                    className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Start Queue →
                   </button>
@@ -1102,6 +1353,8 @@ export default function Home() {
                     setUploadProgress(null);
                   }}
                   onPrevious={handlePrevious}
+                  onStartOver={handleStartNew}
+                  autoStart={true}
                 />
               )
             );

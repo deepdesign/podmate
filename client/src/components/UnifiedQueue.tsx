@@ -52,12 +52,15 @@ type UnifiedQueueProps = {
   metadata: Partial<CreateFromTemplateBody>;
   onComplete?: () => void;
   onPrevious?: () => void;
+  onStartOver?: () => void;
+  autoStart?: boolean;
 };
 
-export default function UnifiedQueue({ template, images, selectedVariants, metadata, onComplete, onPrevious }: UnifiedQueueProps) {
+export default function UnifiedQueue({ template, images, selectedVariants, metadata, onComplete, onPrevious, onStartOver, autoStart = false }: UnifiedQueueProps) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
   const [tunnelStatus, setTunnelStatus] = useState<'unknown' | 'valid' | 'invalid'>('unknown');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -65,8 +68,169 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
   const processingRef = useRef(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize queue from images
+  // Track if queue has been initialized to prevent duplicate initialization
+  const queueInitializedRef = useRef<Set<string>>(new Set());
+  // Track which fileIds are currently being processed or have been completed to prevent duplicates
+  const processedFileIdsRef = useRef<Set<string>>(new Set());
+  const hasRestoredQueueRef = useRef(false);
+
+  // Restore queue state from sessionStorage on mount
   useEffect(() => {
+    if (hasRestoredQueueRef.current || images.length === 0) return;
+    
+    try {
+      const savedQueue = sessionStorage.getItem('podmate_queue');
+      const savedHasStarted = sessionStorage.getItem('podmate_queue_hasStarted');
+      const savedIsPaused = sessionStorage.getItem('podmate_queue_isPaused');
+      
+        if (savedQueue) {
+          const parsedQueue: any[] = JSON.parse(savedQueue);
+          // Only restore if the saved queue matches current images (same fileIds)
+          const savedFileIds = new Set(parsedQueue.map((q: any) => q.fileId).filter(Boolean));
+          const currentFileIds = new Set(images.map(img => img.fileId));
+          
+          const fileIdsMatch = savedFileIds.size === currentFileIds.size &&
+            [...savedFileIds].every(id => currentFileIds.has(id));
+          
+          if (fileIdsMatch && parsedQueue.length === images.length) {
+            // Reindex items to match current images order
+            // Note: saved queue items only have fileId, not full image objects
+            const reindexedQueue: QueueItem[] = images.map((image, index) => {
+              const savedItem = parsedQueue.find((q: any) => q.fileId === image.fileId);
+              if (savedItem) {
+                return {
+                  status: savedItem.status || 'submitted',
+                  index,
+                  image, // Use current image data from images prop
+                  productId: savedItem.productId,
+                  productTitle: savedItem.productTitle,
+                  error: savedItem.error,
+                  submittedAt: savedItem.submittedAt || Date.now(),
+                  completedAt: savedItem.completedAt,
+                  gelatoStatus: savedItem.gelatoStatus,
+                };
+              }
+              // Fallback: create new item if not found in saved queue
+              return {
+                image,
+                status: 'submitted' as const,
+                index,
+                submittedAt: Date.now(),
+              };
+            });
+          
+          setQueue(reindexedQueue);
+          
+          // Restore processing flags
+          if (savedHasStarted === 'true') {
+            setHasStarted(true);
+          }
+          if (savedIsPaused === 'true') {
+            setIsPaused(true);
+          }
+          
+          // Mark processed fileIds for items that are complete or have productIds
+          reindexedQueue.forEach(item => {
+            if (item.status === 'complete' || item.productId) {
+              processedFileIdsRef.current.add(item.image.fileId);
+            }
+          });
+          
+          hasRestoredQueueRef.current = true;
+          
+          return; // Don't initialize from images if we restored
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore queue state:', err);
+    }
+    
+    hasRestoredQueueRef.current = true;
+  }, [images]);
+
+  // Persist queue state to sessionStorage whenever it changes
+  useEffect(() => {
+    if (queue.length === 0) return;
+    
+    try {
+      // Save minimal queue state - only store fileId reference, not full image objects
+      const queueToSave = queue.map(q => ({
+        status: q.status,
+        index: q.index,
+        productId: q.productId,
+        productTitle: q.productTitle,
+        error: q.error,
+        fileId: q.image.fileId, // Only store fileId reference
+        submittedAt: q.submittedAt,
+        completedAt: q.completedAt,
+        gelatoStatus: q.gelatoStatus,
+        // Don't store: image (reconstruct from images prop), payloadSent, responseReceived, imageUrlSent, errorDetails
+      }));
+      
+      const queueData = JSON.stringify(queueToSave);
+      
+      // Check if data is too large (sessionStorage limit is typically 5-10MB)
+      if (queueData.length > 4 * 1024 * 1024) { // 4MB warning threshold
+        console.warn('Queue data is large, may exceed sessionStorage limits:', queueData.length, 'bytes');
+      }
+      
+      sessionStorage.setItem('podmate_queue', queueData);
+      sessionStorage.setItem('podmate_queue_hasStarted', hasStarted.toString());
+      sessionStorage.setItem('podmate_queue_isPaused', isPaused.toString());
+    } catch (err) {
+      // Handle quota exceeded error
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        console.error('SessionStorage quota exceeded. Queue state not saved. Error:', err);
+        // Optionally try to save a minimal version
+        try {
+          const minimalQueue = queue.map(q => ({
+            status: q.status,
+            index: q.index,
+            productId: q.productId,
+            fileId: q.image.fileId,
+          }));
+          sessionStorage.setItem('podmate_queue', JSON.stringify(minimalQueue));
+        } catch (minimalErr) {
+          console.error('Failed to save even minimal queue state:', minimalErr);
+        }
+      } else {
+        console.error('Failed to save queue state:', err);
+      }
+    }
+  }, [queue, hasStarted, isPaused]);
+
+  // Clear queue persistence when starting over
+  useEffect(() => {
+    if (onStartOver) {
+      // Clear queue state when component unmounts if starting over
+      return () => {
+        try {
+          sessionStorage.removeItem('podmate_queue');
+          sessionStorage.removeItem('podmate_queue_hasStarted');
+          sessionStorage.removeItem('podmate_queue_isPaused');
+        } catch (err) {
+          console.error('Failed to clear queue state:', err);
+        }
+      };
+    }
+  }, [onStartOver]);
+
+  // Initialize queue from images (only if not restored)
+  useEffect(() => {
+    if (!hasRestoredQueueRef.current) return;
+    
+    // Create a unique key for this images array to detect if we've already initialized
+    const imagesKey = images.map(img => img.fileId).sort().join('|');
+    
+    // Only initialize if we haven't already initialized for this exact set of images
+    if (queueInitializedRef.current.has(imagesKey)) {
+      return;
+    }
+    
+    queueInitializedRef.current.add(imagesKey);
+    // Reset processed fileIds when initializing a new queue
+    processedFileIdsRef.current.clear();
+    
     const items: QueueItem[] = images.map((image, index) => ({
       image,
       status: 'submitted',
@@ -74,7 +238,14 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
       submittedAt: Date.now(),
     }));
     setQueue(items);
-  }, [images]);
+    // If autoStart is true, automatically start the queue
+    if (autoStart && items.length > 0) {
+      setHasStarted(true);
+      setIsPaused(false);
+    } else {
+      setHasStarted(false); // Reset start state when images change
+    }
+  }, [images, autoStart]);
 
   // Get tunnel URL on mount and periodically
   useEffect(() => {
@@ -135,32 +306,55 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
     }
   }, [needsUrlRefresh]);
 
+  // Track which items are currently being processed to prevent duplicates
+  const processingItemsRef = useRef<Set<number>>(new Set());
+
   // Process a single queue item
   const processItem = useCallback(async (itemIndex: number) => {
     if (processingRef.current || isPaused) return;
+    
+    // Check if this item is already being processed
+    if (processingItemsRef.current.has(itemIndex)) {
+      console.warn(`Item ${itemIndex} is already being processed, skipping duplicate`);
+      return;
+    }
 
     processingRef.current = true;
+    processingItemsRef.current.add(itemIndex);
     setCurrentIndex(itemIndex);
 
     setQueue(prev => {
-      const item = prev.find(q => q.index === itemIndex);
-      if (!item || item.status !== 'submitted') {
+      const queueItem = prev.find(q => q.index === itemIndex);
+      if (!queueItem || queueItem.status !== 'submitted') {
         processingRef.current = false;
+        processingItemsRef.current.delete(itemIndex);
         setCurrentIndex(null);
         return prev;
       }
+      
+      // Check if this fileId has already been processed or is being processed
+      if (processedFileIdsRef.current.has(queueItem.image.fileId)) {
+        console.warn(`File ${queueItem.image.fileId} (index ${itemIndex}) has already been processed, skipping duplicate`);
+        processingRef.current = false;
+        processingItemsRef.current.delete(itemIndex);
+        setCurrentIndex(null);
+        return prev;
+      }
+      
+      // Mark fileId as being processed
+      processedFileIdsRef.current.add(queueItem.image.fileId);
 
       (async () => {
         try {
           // Step 1: Refresh URL if needed
-          let updatedImage = item.image;
-          if (needsUrlRefresh(item.image)) {
+          let updatedImage = queueItem.image;
+          if (needsUrlRefresh(queueItem.image)) {
             setQueue(current => current.map(q => 
               q.index === itemIndex ? { ...q, status: 'uploading' } : q
             ));
 
             try {
-              updatedImage = await refreshImageUrl(item.image);
+              updatedImage = await refreshImageUrl(queueItem.image);
               setQueue(current => current.map(q => 
                 q.index === itemIndex ? { ...q, image: updatedImage } : q
               ));
@@ -173,6 +367,8 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                 } : q
               ));
               processingRef.current = false;
+              processingItemsRef.current.delete(itemIndex);
+              processedFileIdsRef.current.delete(queueItem.image.fileId); // Remove from processed set on error
               setCurrentIndex(null);
               processNextItem();
               return;
@@ -190,6 +386,8 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
               q.index === itemIndex ? { ...q, status: 'error', error: 'No variants selected' } : q
             ));
             processingRef.current = false;
+            processingItemsRef.current.delete(itemIndex);
+            processedFileIdsRef.current.delete(queueItem.image.fileId); // Remove from processed set on error
             setCurrentIndex(null);
             processNextItem();
             return;
@@ -226,6 +424,18 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
           };
 
           try {
+            // Double-check this fileId hasn't been processed by another instance
+            if (processedFileIdsRef.current.has(updatedImage.fileId) && 
+                !processingItemsRef.current.has(itemIndex)) {
+              console.warn(`File ${updatedImage.fileId} was processed by another instance, skipping`);
+              processingRef.current = false;
+              processingItemsRef.current.delete(itemIndex);
+              processedFileIdsRef.current.delete(queueItem.image.fileId);
+              setCurrentIndex(null);
+              processNextItem();
+              return;
+            }
+            
             const response = await createFromTemplate(payload) as any;
             
             setQueue(current => current.map(q => 
@@ -258,6 +468,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
           }
         } finally {
           processingRef.current = false;
+          processingItemsRef.current.delete(itemIndex);
           setCurrentIndex(null);
           processNextItem();
         }
@@ -326,6 +537,31 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
     }
   }, [checkingStatus]);
 
+  // Track if we've checked restored items
+  const hasCheckedRestoredItemsRef = useRef(false);
+
+  // Check status of restored items on mount (after checkItemStatus is defined)
+  useEffect(() => {
+    if (hasCheckedRestoredItemsRef.current || queue.length === 0) return;
+    
+    // Only check if items have productIds (indicating they were restored from a previous session)
+    const itemsToCheck = queue
+      .filter(item => (item.status === 'uploading' || item.productId) && item.productId && !item.completedAt)
+      .map(item => ({ index: item.index, productId: item.productId! }));
+    
+    if (itemsToCheck.length > 0) {
+      hasCheckedRestoredItemsRef.current = true;
+      // Check status after a delay to allow component to fully mount
+      const timeoutId = setTimeout(() => {
+        itemsToCheck.forEach(({ index, productId }) => {
+          checkItemStatus(index, productId, true);
+        });
+      }, 2000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [queue, checkItemStatus]);
+
   // Auto-poll for uploading items
   useEffect(() => {
     const POLL_INTERVAL = 3 * 60 * 1000; // 3 minutes
@@ -355,15 +591,15 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
     };
   }, [queue, checkingStatus, checkItemStatus]);
 
-  // Auto-start processing
+  // Auto-start processing (only after user clicks Start Queue)
   useEffect(() => {
-    if (queue.length > 0 && !processingRef.current && !isPaused) {
+    if (hasStarted && queue.length > 0 && !processingRef.current && !isPaused) {
       const firstSubmitted = queue.find(q => q.status === 'submitted');
       if (firstSubmitted) {
         setTimeout(() => processItem(firstSubmitted.index), 200);
       }
     }
-  }, [queue, isPaused, processItem]);
+  }, [hasStarted, queue, isPaused, processItem]);
 
   // Manual status check
   const handleCheckStatus = async (itemIndex: number) => {
@@ -401,11 +637,40 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
   const uploading = queue.filter(q => q.status === 'uploading').length;
   const submitted = queue.filter(q => q.status === 'submitted').length;
   const errors = queue.filter(q => q.status === 'error').length;
+  const allComplete = queue.length > 0 && completed === queue.length && errors === 0;
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg max-w-7xl mx-auto">
       <div className="p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Step 6: Upload Queue</h2>
+
+        {/* Success Message */}
+        {allComplete && (
+          <div className="mb-6 p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="flex items-start">
+              <svg className="flex-shrink-0 w-6 h-6 text-green-600 dark:text-green-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <div className="ml-3 flex-1">
+                <h3 className="text-lg font-semibold text-green-900 dark:text-green-300 mb-2">
+                  🎉 All Products Successfully Processed!
+                </h3>
+                <p className="text-sm text-green-800 dark:text-green-400 mb-4">
+                  All {queue.length} product{queue.length !== 1 ? 's' : ''} have been uploaded to Gelato and processed successfully. 
+                  Variants and thumbnails are now available in your Gelato dashboard.
+                </p>
+                {onStartOver && (
+                  <button
+                    onClick={onStartOver}
+                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-6 py-3"
+                  >
+                    Start New Upload →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tunnel Status */}
         <div className={`mb-6 p-4 rounded-lg border ${
@@ -442,7 +707,18 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
         {/* Controls */}
         <div className="mb-6 flex justify-between items-center">
           <div className="flex gap-3">
-            {(submitted > 0 || uploading > 0) && (
+            {!hasStarted && !autoStart && queue.length > 0 && (
+              <button
+                onClick={() => {
+                  setHasStarted(true);
+                  setIsPaused(false);
+                }}
+                className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5"
+              >
+                Start Queue →
+              </button>
+            )}
+            {hasStarted && (submitted > 0 || uploading > 0) && (
               <button
                 onClick={() => setIsPaused(!isPaused)}
                 className="text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700 dark:focus:ring-gray-700"

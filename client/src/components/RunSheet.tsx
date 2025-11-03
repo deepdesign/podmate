@@ -583,7 +583,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                                   handleCheckStatus(index, false);
                                 }}
                                 disabled={checkingStatusIndex === index || autoChecking.has(index)}
-                                className="text-white bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {checkingStatusIndex === index ? 'Checking...' : autoChecking.has(index) ? 'Auto-checking...' : 'Check Status'}
                               </button>
@@ -602,7 +602,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                                 handleRetry(index);
                               }}
                               disabled={retryingIndex === index}
-                              className="text-white bg-gradient-to-r from-teal-400 via-teal-500 to-green-500 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-teal-300 dark:focus:ring-teal-800 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="text-white bg-gradient-to-r from-brand via-brand-dark to-brand-accent hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-brand/30 dark:focus:ring-brand/50 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {retryingIndex === index ? 'Retrying...' : 'Retry'}
                             </button>

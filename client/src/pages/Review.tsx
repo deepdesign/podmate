@@ -245,7 +245,7 @@ export default function Review() {
             type="button"
             onClick={createProducts}
             disabled={creating || images.length === 0 || !metadata.description}
-            className="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-5 py-2.5 text-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {creating ? 'Uploading to Gelato...' : 'Upload to Gelato'}
           </button>

@@ -7,7 +7,15 @@ export default {
   ],
   darkMode: 'class',
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        brand: {
+          DEFAULT: '#000000',
+          dark: '#1a1a1a',
+          accent: '#0ea5e9',
+        },
+      },
+    },
   },
   plugins: [],
 } satisfies Config;

@@ -34,6 +34,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
   const [googleDriveFolders, setGoogleDriveFolders] = useState<CloudFile[]>([]);
   const [selectedCloudFiles, setSelectedCloudFiles] = useState<Set<string>>(new Set());
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   
   // Preview modal state
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
@@ -169,28 +170,63 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadMethod]);
 
+  // Track if files have been loaded and last path to prevent duplicate loads
+  const filesLoadedRef = useRef<{ dropbox: string | null; googledrive: string | null }>({ dropbox: null, googledrive: null });
+
   // Load files when tab changes and user is connected (use saved paths)
   useEffect(() => {
     try {
       const savedCredentials = getCloudCredentials();
       if (uploadMethod === 'dropbox' && isDropboxConnected && dropboxFiles.length === 0 && dropboxFolders.length === 0) {
         // Load from saved path or root
-        if (savedCredentials.dropboxLastPath && savedCredentials.dropboxLastPath !== currentDropboxPath) {
-          setCurrentDropboxPath(savedCredentials.dropboxLastPath);
+        const pathToLoad = savedCredentials.dropboxLastPath || '';
+        if (pathToLoad !== currentDropboxPath) {
+          setCurrentDropboxPath(pathToLoad);
         }
-        loadDropboxFiles();
+        // Only load if we haven't loaded this path yet
+        if (filesLoadedRef.current.dropbox !== pathToLoad) {
+          filesLoadedRef.current.dropbox = pathToLoad;
+          loadDropboxFiles();
+        }
       } else if (uploadMethod === 'googledrive' && isGoogleDriveConnected && googleDriveFiles.length === 0) {
         // Load from saved folder or root
-        if (savedCredentials.googleDriveLastFolderId && savedCredentials.googleDriveLastFolderId !== currentGoogleDriveFolderId) {
-          setCurrentGoogleDriveFolderId(savedCredentials.googleDriveLastFolderId);
+        const folderToLoad = savedCredentials.googleDriveLastFolderId || 'root';
+        if (folderToLoad !== currentGoogleDriveFolderId) {
+          setCurrentGoogleDriveFolderId(folderToLoad);
         }
-        loadGoogleDriveFiles();
+        // Only load if we haven't loaded this folder yet
+        if (filesLoadedRef.current.googledrive !== folderToLoad) {
+          filesLoadedRef.current.googledrive = folderToLoad;
+          loadGoogleDriveFiles();
+        }
+      }
+      
+      // Reset flags when switching tabs
+      if (uploadMethod !== 'dropbox') {
+        filesLoadedRef.current.dropbox = null;
+      }
+      if (uploadMethod !== 'googledrive') {
+        filesLoadedRef.current.googledrive = null;
       }
     } catch (err) {
       console.error('Error in file loading useEffect:', err);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadMethod, isDropboxConnected, isGoogleDriveConnected]);
+
+  // Load files when path changes (for navigation, but only if path actually changed)
+  const prevDropboxPathRef = useRef<string>(currentDropboxPath);
+  useEffect(() => {
+    if (uploadMethod === 'dropbox' && isDropboxConnected && currentDropboxPath !== undefined) {
+      // Only reload if path actually changed (not initial mount)
+      if (prevDropboxPathRef.current !== currentDropboxPath && prevDropboxPathRef.current !== undefined) {
+        filesLoadedRef.current.dropbox = currentDropboxPath;
+        loadDropboxFiles();
+      }
+      prevDropboxPathRef.current = currentDropboxPath;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDropboxPath, uploadMethod, isDropboxConnected]);
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -309,7 +345,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
         type: 'folder' as const,
       })));
       
-      setDropboxFiles(result.files.map(f => ({
+      const newFiles = result.files.map(f => ({
         id: f.path || f.id,
         name: f.name,
         path: f.path,
@@ -317,7 +353,19 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
         modified: f.modified,
         sourceType: 'dropbox' as const,
         type: 'file' as const,
-      })));
+      }));
+      setDropboxFiles(newFiles);
+      
+      // Preserve selections that still exist in the new file list
+      setSelectedCloudFiles(prev => {
+        const newFileIds = new Set(newFiles.map(f => f.id));
+        const preservedSelections = new Set(
+          Array.from(prev).filter(id => newFileIds.has(id))
+        );
+        return preservedSelections;
+      });
+      
+      setLastSelectedIndex(null); // Reset last selected index when files reload
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('Error loading Dropbox files:', err);
@@ -349,13 +397,23 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
         setError(null);
       }
       
-      setGoogleDriveFiles(result.files.map(f => ({
+      const newFiles = result.files.map(f => ({
         id: f.id,
         name: f.name,
         size: f.size,
         modified: f.modified,
         sourceType: 'googledrive' as const,
-      })));
+      }));
+      setGoogleDriveFiles(newFiles);
+      
+      // Preserve selections that still exist in the new file list
+      setSelectedCloudFiles(prev => {
+        const newFileIds = new Set(newFiles.map(f => f.id));
+        const preservedSelections = new Set(
+          Array.from(prev).filter(id => newFileIds.has(id))
+        );
+        return preservedSelections;
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('Error loading Google Drive files:', err);
@@ -366,16 +424,38 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
   };
 
   // Handle cloud file selection
-  const toggleFileSelection = (fileId: string) => {
+  const toggleFileSelection = (fileId: string, index: number, shiftKey: boolean = false) => {
     setSelectedCloudFiles(prev => {
       const next = new Set(prev);
-      if (next.has(fileId)) {
-        next.delete(fileId);
+      
+      // Handle shift+click for range selection (only for Dropbox)
+      if (shiftKey && lastSelectedIndex !== null && uploadMethod === 'dropbox' && dropboxFiles.length > 0) {
+        const files = dropboxFiles;
+        const startIndex = Math.min(lastSelectedIndex, index);
+        const endIndex = Math.max(lastSelectedIndex, index);
+        
+        // Select all files in the range
+        for (let i = startIndex; i <= endIndex; i++) {
+          if (files[i]) {
+            next.add(files[i].id);
+          }
+        }
       } else {
-        next.add(fileId);
+        // Normal toggle behavior
+        if (next.has(fileId)) {
+          next.delete(fileId);
+        } else {
+          next.add(fileId);
+        }
       }
+      
       return next;
     });
+    
+    // Update last selected index only if not shift-clicking
+    if (!shiftKey || lastSelectedIndex === null) {
+      setLastSelectedIndex(index);
+    }
   };
 
   // Add selected cloud files
@@ -463,16 +543,21 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
   // Expose selected files count and add handler to parent (after handleAddSelectedCloudFiles is defined)
   useEffect(() => {
     // Only call if callback is provided and handler is defined
-    if (onSelectedFilesChange && typeof handleAddSelectedCloudFiles === 'function') {
-      try {
-        onSelectedFilesChange(selectedCloudFiles.size, handleAddSelectedCloudFiles);
-      } catch (err) {
-        console.error('Error in onSelectedFilesChange:', err);
+    if (onSelectedFilesChange) {
+      if (selectedCloudFiles.size > 0 && typeof handleAddSelectedCloudFiles === 'function') {
+        try {
+          onSelectedFilesChange(selectedCloudFiles.size, handleAddSelectedCloudFiles);
+        } catch (err) {
+          console.error('Error in onSelectedFilesChange:', err);
+        }
+      } else {
+        // Reset when no files selected
+        onSelectedFilesChange(0, async () => {});
       }
     }
-    // Only depend on selectedCloudFiles.size to avoid infinite loops
+    // Include handleAddSelectedCloudFiles to ensure parent always has latest version
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCloudFiles.size]);
+  }, [selectedCloudFiles.size, handleAddSelectedCloudFiles]);
 
   const formatFileSize = (bytes?: number | string): string => {
     if (!bytes) return '';
@@ -602,6 +687,9 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">
                   <button
                     onClick={() => {
+                      // Clear selections when navigating up
+                      setSelectedCloudFiles(new Set());
+                      setLastSelectedIndex(null);
                       const parentPath = currentDropboxPath.split('/').slice(0, -1).join('/') || '';
                       saveDropboxPath(parentPath);
                       setTimeout(() => loadDropboxFiles(), 100);
@@ -632,8 +720,10 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   setSelectedCloudFiles(new Set(dropboxFiles.map(f => f.id)));
+                                  setLastSelectedIndex(null);
                                 } else {
                                   setSelectedCloudFiles(new Set());
+                                  setLastSelectedIndex(null);
                                 }
                               }}
                               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -652,6 +742,9 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                             key={folder.id} 
                             className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                             onClick={() => {
+                              // Clear selections when navigating to a different folder
+                              setSelectedCloudFiles(new Set());
+                              setLastSelectedIndex(null);
                               saveDropboxPath(folder.path || '');
                               setTimeout(() => loadDropboxFiles(), 100);
                             }}
@@ -677,7 +770,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                           </tr>
                         ))}
                         {/* Files */}
-                        {dropboxFiles.map((file) => {
+                        {dropboxFiles.map((file, index) => {
                           const freshCredentials = getCloudCredentials();
                           const thumbnailUrl = file.path && freshCredentials.dropboxAccessToken
                             ? `/api/dropbox/get-thumbnail?token=${encodeURIComponent(freshCredentials.dropboxAccessToken)}&path=${encodeURIComponent(file.path)}`
@@ -689,8 +782,21 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                                 <input
                                   type="checkbox"
                                   checked={selectedCloudFiles.has(file.id)}
-                                  onChange={() => toggleFileSelection(file.id)}
-                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    
+                                    // Handle shift-click for range selection
+                                    if (e.shiftKey && lastSelectedIndex !== null && uploadMethod === 'dropbox') {
+                                      toggleFileSelection(file.id, index, true);
+                                    } else {
+                                      // Normal click - toggle this file
+                                      toggleFileSelection(file.id, index, false);
+                                    }
+                                  }}
                                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
                               </td>
