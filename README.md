@@ -223,6 +223,11 @@ npm test
 - Multer (file uploads)
 - Sharp (image processing)
 
+### UI Assets
+
+- **Logo**: Theme-aware logo component that displays horizontal light/dark variants based on the current theme
+- **Favicon**: Multi-size favicon setup using Podmate brandmark PNG files (16px to 192px) with Apple touch icon support
+
 ## Building for Production
 
 ```bash
