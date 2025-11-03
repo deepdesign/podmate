@@ -659,14 +659,27 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                   All {queue.length} product{queue.length !== 1 ? 's' : ''} have been uploaded to Gelato and processed successfully. 
                   Variants and thumbnails are now available in your Gelato dashboard.
                 </p>
-                {onStartOver && (
-                  <button
-                    onClick={onStartOver}
-                    className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-6 py-3"
+                <div className="flex gap-3 flex-wrap">
+                  {onStartOver && (
+                    <button
+                      onClick={onStartOver}
+                      className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-6 py-3"
+                    >
+                      Start New Upload →
+                    </button>
+                  )}
+                  <a
+                    href="https://dashboard.gelato.com/stores/list"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 font-medium text-sm px-6 py-3 transition-colors"
                   >
-                    Start New Upload →
-                  </button>
-                )}
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    View in Gelato Dashboard
+                  </a>
+                </div>
               </div>
             </div>
           </div>

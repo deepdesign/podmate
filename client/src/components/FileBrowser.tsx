@@ -39,7 +39,10 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
   // Preview modal state
   const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
   
-  // Get credentials once and compute connection status
+  // State to track credential updates and trigger re-renders
+  const [credentialsVersion, setCredentialsVersion] = useState(0);
+  
+  // Get credentials and compute connection status (re-computes when credentialsVersion changes)
   let credentials: ReturnType<typeof getCloudCredentials>;
   let isDropboxConnected = false;
   let isGoogleDriveConnected = false;
@@ -54,6 +57,13 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
     console.error('Error getting cloud credentials:', err);
     credentials = {} as ReturnType<typeof getCloudCredentials>;
   }
+  
+  // Force re-computation of connection status when credentialsVersion changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // This effect runs when credentialsVersion changes, triggering a re-render
+    // which will re-compute isDropboxConnected and isGoogleDriveConnected
+  }, [credentialsVersion]);
   
   const getDefaultTab = (): UploadMethod => {
     if (initialTab) return initialTab;
@@ -172,6 +182,61 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
 
   // Track if files have been loaded and last path to prevent duplicate loads
   const filesLoadedRef = useRef<{ dropbox: string | null; googledrive: string | null }>({ dropbox: null, googledrive: null });
+  const tokenRefreshAttemptedRef = useRef<{ dropbox: boolean; googledrive: boolean }>({ dropbox: false, googledrive: false });
+
+  // Automatically refresh tokens on mount if they're expired or close to expiry
+  useEffect(() => {
+    const refreshTokensIfNeeded = async () => {
+      const creds = getCloudCredentials();
+      const now = Date.now();
+      const REFRESH_THRESHOLD = 5 * 60 * 1000; // Refresh if expiring within 5 minutes
+
+      // Check and refresh Dropbox token if needed
+      if (creds.dropboxAccessToken && creds.dropboxRefreshToken && !tokenRefreshAttemptedRef.current.dropbox) {
+        const isExpired = !creds.dropboxTokenExpiry || creds.dropboxTokenExpiry <= now;
+        const isExpiringSoon = creds.dropboxTokenExpiry && (creds.dropboxTokenExpiry - now) < REFRESH_THRESHOLD;
+
+        if (isExpired || isExpiringSoon) {
+          tokenRefreshAttemptedRef.current.dropbox = true;
+          try {
+            console.log('Dropbox token expired or expiring soon, automatically refreshing...');
+            const refreshResult = await refreshDropboxToken(creds.dropboxRefreshToken);
+            
+            saveCloudCredentials({
+              ...creds,
+              dropboxAccessToken: refreshResult.access_token,
+              dropboxTokenExpiry: refreshResult.expiryTime,
+            });
+            
+            // Trigger re-render to update connection status
+            setCredentialsVersion(prev => prev + 1);
+            
+            console.log('Dropbox token refreshed successfully');
+          } catch (err) {
+            console.error('Failed to automatically refresh Dropbox token:', err);
+            // Token refresh failed - user will need to reconnect
+            // Clear invalid tokens so they're prompted to reconnect
+            saveCloudCredentials({
+              ...creds,
+              dropboxAccessToken: undefined,
+              dropboxRefreshToken: undefined,
+              dropboxTokenExpiry: undefined,
+            });
+            
+            // Trigger re-render to update connection status
+            setCredentialsVersion(prev => prev + 1);
+          }
+        }
+      }
+
+      // Check and refresh Google Drive token if needed (similar logic for Google Drive)
+      // Note: Google Drive token refresh would need to be implemented similarly
+      // For now, we'll just handle Dropbox
+    };
+
+    refreshTokensIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Load files when tab changes and user is connected (use saved paths)
   useEffect(() => {
