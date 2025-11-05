@@ -159,7 +159,7 @@ start-server.bat
 npm run dev
 ```
 
-- **Client** runs on `http://localhost:5173` (Vite dev server)
+- **Client** runs on `http://localhost:5174` (Vite dev server)
 - **Server** runs on `http://localhost:5175` (Express API)
 
 </details>
@@ -167,7 +167,7 @@ npm run dev
 <details>
 <summary><b>5. Open the App</b></summary>
 
-Navigate to `http://localhost:5173` in your browser.
+Navigate to `http://localhost:5174` in your browser.
 
 </details>
 

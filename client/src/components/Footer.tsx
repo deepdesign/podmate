@@ -2,17 +2,23 @@
  * Reusable Footer Component for Deep Design Projects
  * 
  * This component can be easily copied to other Cursor/React projects.
+ * It automatically aligns with page content width and includes theme-aware styling.
  * 
  * Usage:
  * 1. Copy this file to your project's components folder
  * 2. Copy the logo assets from `public/_other logos/` to your project's public folder
  * 3. Import and use: <Footer logo={<YourLogo />} strapline="Your app description" />
  * 
+ * Layout:
+ * - Footer wrapper: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8` (matches main element)
+ * - Footer element: `max-w-[1600px] mx-auto` (matches page content width)
+ * - Dark mode: Background `#0f1521`, no shadow. Light mode: White background with shadow.
+ * 
  * Props:
  * - logo: ReactNode - Your project logo component
  * - strapline: string - Description text for your project
  * - homeLink: string - Link for the logo (default: "/")
- * - settingsLink: string - Link for settings (default: "/settings", set to null to hide)
+ * - settingsLink: string | null - Link for settings (default: "/settings", set to null to hide)
  * - projects: Array of {name, url, logoDark, logoLight} - Project logos to display
  * - companyName: string - Company name for copyright (default: "Deep Design Pty Ltd")
  * - companyUrl: string - Company URL for copyright link (default: "https://jamescutts.me/")
@@ -101,8 +107,12 @@ export default function Footer({
   }, []);
 
   return (
-    <footer className="bg-white rounded-lg shadow-sm m-4 dark:bg-gray-900">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
+      <footer 
+        className={`w-full max-w-[1600px] mx-auto rounded-lg py-4 md:py-8 ${isDark ? '' : 'bg-white shadow-sm'}`}
+        style={isDark ? { backgroundColor: '#0f1521' } : undefined}
+      >
+        <div className="w-full px-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           {/* Logo and Strapline */}
           {logo && (
@@ -215,6 +225,7 @@ export default function Footer({
         </div>
       </div>
     </footer>
+    </div>
   );
 }
 

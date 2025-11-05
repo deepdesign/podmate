@@ -155,7 +155,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
           '   - User support email: your-email@example.com\n' +
           '   - Developer contact: your-email@example.com\n' +
           '   - Application logo: (optional, can skip)\n' +
-          '   - Home page URL: http://localhost:5173\n' +
+          '   - Home page URL: http://localhost:5174\n' +
           '   - Privacy Policy URL: (can use a placeholder for testing)\n' +
           '   - Terms of Service URL: (can use a placeholder for testing)\n' +
           '   - Application category: Productivity or Other\n\n' +
