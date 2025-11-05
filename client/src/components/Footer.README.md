@@ -89,7 +89,7 @@ This Footer component is designed to be easily copied and used across all Deep D
 | `settingsLink` | `string \| null` | `"/settings"` | Settings page link (set to `null` to hide) |
 | `projects` | `Project[]` | Default 4 projects | Array of project logos to display |
 | `companyName` | `string` | `"Deep Design Pty Ltd"` | Company name in copyright |
-| `companyUrl` | `string` | `"https://jamescutts.me/"` | Company website URL |
+| `companyUrl` | `string` | `"https://www.jamescutts.me/"` | Company website URL |
 
 ## Project Object Structure
 

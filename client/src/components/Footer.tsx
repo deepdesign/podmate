@@ -21,7 +21,7 @@
  * - settingsLink: string | null - Link for settings (default: "/settings", set to null to hide)
  * - projects: Array of {name, url, logoDark, logoLight} - Project logos to display
  * - companyName: string - Company name for copyright (default: "Deep Design Pty Ltd")
- * - companyUrl: string - Company URL for copyright link (default: "https://jamescutts.me/")
+ * - companyUrl: string - Company URL for copyright link (default: "https://www.jamescutts.me/")
  */
 
 import { useEffect, useState, ReactNode } from 'react';
@@ -76,7 +76,7 @@ export default function Footer({
     }
   ],
   companyName = "Deep Design Pty Ltd",
-  companyUrl = "https://jamescutts.me/"
+  companyUrl = "https://www.jamescutts.me/"
 }: FooterProps) {
   const [isDark, setIsDark] = useState(false);
 
@@ -205,7 +205,7 @@ export default function Footer({
               href={companyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               {companyName}
             </a>

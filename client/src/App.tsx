@@ -35,7 +35,7 @@ function App() {
       <Footer 
         logo={<Logo />}
         strapline="Bulk product upload for Gelato"
-        settingsLink="/settings"
+        settingsLink={null}
       />
     </div>
   );

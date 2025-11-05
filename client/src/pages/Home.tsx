@@ -917,7 +917,7 @@ export default function Home() {
     switch (currentStep) {
           case 1:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ maxHeight: 'calc(100vh - 420px)' }}>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col h-full">
                 <div className="p-6 flex-1 overflow-auto min-h-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Step 1: Select Template</h2>
                   <TemplatePicker onTemplatesLoaded={handleTemplatesLoaded} />
@@ -1365,7 +1365,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-[1600px] mx-auto">
+    <div className="flex flex-col lg:flex-row gap-6 max-w-[1600px] mx-auto items-start lg:items-stretch">
       {/* Side Navigation with Stepper */}
       <aside className="w-full lg:w-80 flex-shrink-0">
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 sticky top-8">
@@ -1380,7 +1380,7 @@ export default function Home() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 flex flex-col">
         {/* Step Content */}
         {renderStepContent()}
       </main>
