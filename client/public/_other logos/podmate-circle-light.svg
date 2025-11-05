@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186.96 185.38">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #00aeef;
+      }
+
+      .cls-2 {
+        fill: #fff200;
+      }
+
+      .cls-3 {
+        fill: #ec008c;
+      }
+
+      .cls-4 {
+        isolation: isolate;
+      }
+
+      .cls-5 {
+        mix-blend-mode: multiply;
+      }
+
+      .cls-6 {
+        fill: #f4f4f4;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <g>
+      <ellipse class="cls-6" cx="93.48" cy="92.69" rx="93.48" ry="92.69"/>
+      <g class="cls-4">
+        <g id="Layer_2-2" data-name="Layer 2">
+          <g id="uuid-b23995bf-e72e-4fa1-a16e-c34404bd0171" data-name="Layer 1-2">
+            <g>
+              <g class="cls-5">
+                <ellipse class="cls-1" cx="117.26" cy="109.41" rx="39.55" ry="39.22"/>
+              </g>
+              <g class="cls-5">
+                <ellipse class="cls-3" cx="69.7" cy="109.41" rx="39.55" ry="39.22"/>
+              </g>
+              <g class="cls-5">
+                <ellipse class="cls-2" cx="93.48" cy="66.05" rx="39.55" ry="39.22"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

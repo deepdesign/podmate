@@ -917,13 +917,13 @@ export default function Home() {
     switch (currentStep) {
           case 1:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div className="p-6">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ maxHeight: 'calc(100vh - 420px)' }}>
+                <div className="p-6 flex-1 overflow-auto min-h-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Step 1: Select Template</h2>
                   <TemplatePicker onTemplatesLoaded={handleTemplatesLoaded} />
                 </div>
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-                <div className="p-6 flex justify-between items-center">
+                <div className="border-t border-gray-200 dark:border-gray-700 flex-shrink-0"></div>
+                <div className="p-6 flex justify-between items-center flex-shrink-0">
                   {currentStep === 1 ? (
                     <div></div>
                   ) : (
@@ -952,7 +952,7 @@ export default function Home() {
 
           case 2:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 420px)' }}>
                 <div className="p-6 flex flex-col flex-1 min-h-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Step 2: Upload Images</h2>
                   {template && (
@@ -1053,7 +1053,7 @@ export default function Home() {
 
           case 3:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 420px)' }}>
                 <div className="p-6 flex-shrink-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Step 3: Select Variants</h2>
                   {images.length === 0 ? (
@@ -1149,7 +1149,7 @@ export default function Home() {
 
           case 5:
             return (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg flex flex-col" style={{ height: 'calc(100vh - 420px)' }}>
                 <div className="p-6 flex-shrink-0">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Step 5: Review & Upload to Gelato</h2>
                   
