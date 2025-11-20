@@ -572,11 +572,10 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                     <td colSpan={2} className="px-6 py-4 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       <div className="space-y-3 text-xs">
                         {/* Action Buttons at top of expanded row */}
-                        {(() => {
-                          const buttons: React.ReactNode[] = [];
-                          if (result.productId) {
-                            buttons.push(
-                              <div key="check-status" className="flex items-center gap-2">
+                        {(result.productId || result.status === 'error') ? (
+                          <div className="flex gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+                            {result.productId ? (
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -588,18 +587,15 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                                 >
                                   {checkingStatusIndex === index ? 'Checking...' : autoChecking.has(index) ? 'Auto-checking...' : 'Check Status'}
                                 </button>
-                                {autoChecking.has(index) && (
+                                {autoChecking.has(index) ? (
                                   <span className="text-xs text-gray-600 dark:text-gray-400 italic">
                                     (Auto-checking every 3 min)
                                   </span>
-                                )}
+                                ) : null}
                               </div>
-                            );
-                          }
-                          if (result.status === 'error') {
-                            buttons.push(
+                            ) : null}
+                            {result.status === 'error' ? (
                               <button
-                                key="retry"
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -610,14 +606,9 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               >
                                 {retryingIndex === index ? 'Retrying...' : 'Retry'}
                               </button>
-                            );
-                          }
-                          return buttons.length > 0 ? (
-                            <div className="flex gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
-                              {buttons}
-                            </div>
-                          ) : null;
-                        })()}
+                            ) : null}
+                          </div>
+                        ) : null}
                         
                         {/* Diagnostic Messages - always visible when row is expanded */}
                         {result.responseReceived && typeof result.responseReceived === 'object' && result.responseReceived !== null ? ((): React.ReactNode => {
@@ -828,7 +819,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                             <span className="text-gray-500 dark:text-gray-400 ml-2">Not available</span>
                           )}
                         </div>
-                        {result.payloadSent ? ((): React.ReactNode => (
+                        {result.payloadSent ? (
                           <div>
                             <button
                               type="button"
@@ -851,7 +842,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               </pre>
                             ) : null}
                           </div>
-                        ))() : null}
+                        ) : null}
                         {result.responseReceived ? (
                           <div>
                             <button

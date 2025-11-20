@@ -1135,7 +1135,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                               );
                             })() : null}
 
-                            {item.imageUrlSent ? ((): React.ReactNode => (
+                            {item.imageUrlSent ? (
                               <div className="mt-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                 {/* Image URL Preview */}
                                 <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
@@ -1181,7 +1181,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                                   </div>
                                 </div>
                               </div>
-                            ))() : null}
+                            ) : null}
 
                             {/* Preview and Admin URLs */}
                             {item.gelatoStatus && (item.gelatoStatus.previewUrl || item.gelatoStatus.adminUrl) && (
