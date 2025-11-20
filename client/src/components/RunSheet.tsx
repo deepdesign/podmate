@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type React from 'react';
 import type { ProductCreationResult } from '../lib/types';
 import { generateCSV, downloadCSV } from '../lib/validators';
 import { getProductStatus } from '../lib/api';
@@ -571,44 +572,55 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                     <td colSpan={2} className="px-6 py-4 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       <div className="space-y-3 text-xs">
                         {/* Action Buttons at top of expanded row */}
-                        <div className="flex gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
-                          {result.productId ? (
-                            <div className="flex items-center gap-2">
+                        {(() => {
+                          const buttons: React.ReactNode[] = [];
+                          if (result.productId) {
+                            buttons.push(
+                              <div key="check-status" className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCheckStatus(index, false);
+                                  }}
+                                  disabled={checkingStatusIndex === index || autoChecking.has(index)}
+                                  className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {checkingStatusIndex === index ? 'Checking...' : autoChecking.has(index) ? 'Auto-checking...' : 'Check Status'}
+                                </button>
+                                {autoChecking.has(index) && (
+                                  <span className="text-xs text-gray-600 dark:text-gray-400 italic">
+                                    (Auto-checking every 3 min)
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (result.status === 'error') {
+                            buttons.push(
                               <button
+                                key="retry"
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCheckStatus(index, false);
+                                  handleRetry(index);
                                 }}
-                                disabled={checkingStatusIndex === index || autoChecking.has(index)}
-                                className="text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-300 dark:focus:ring-gray-700 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={retryingIndex === index}
+                                className="text-white bg-gradient-to-r from-brand via-brand-dark to-brand-accent hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-brand/30 dark:focus:ring-brand/50 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                {checkingStatusIndex === index ? 'Checking...' : autoChecking.has(index) ? 'Auto-checking...' : 'Check Status'}
+                                {retryingIndex === index ? 'Retrying...' : 'Retry'}
                               </button>
-                              {autoChecking.has(index) ? (
-                                <span className="text-xs text-gray-600 dark:text-gray-400 italic">
-                                  (Auto-checking every 3 min)
-                                </span>
-                              ) : null}
+                            );
+                          }
+                          return buttons.length > 0 ? (
+                            <div className="flex gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+                              {buttons}
                             </div>
-                          ) : null}
-                          {result.status === 'error' ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRetry(index);
-                              }}
-                              disabled={retryingIndex === index}
-                              className="text-white bg-gradient-to-r from-brand via-brand-dark to-brand-accent hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-brand/30 dark:focus:ring-brand/50 font-medium rounded-lg text-sm px-4 py-2 text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {retryingIndex === index ? 'Retrying...' : 'Retry'}
-                            </button>
-                          ) : null}
-                        </div>
+                          ) : null;
+                        })()}
                         
                         {/* Diagnostic Messages - always visible when row is expanded */}
-                        {result.responseReceived && typeof result.responseReceived === 'object' && result.responseReceived !== null && ((): React.ReactNode => {
+                        {result.responseReceived && typeof result.responseReceived === 'object' && result.responseReceived !== null ? ((): React.ReactNode => {
                           const response = result.responseReceived as any;
                           const variants = Array.isArray(response.variants) ? response.variants : [];
                           const productImages = Array.isArray(response.productImages) ? response.productImages : [];
@@ -764,7 +776,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               </div>
                             </div>
                           );
-                        })()}
+                        })() : null}
                         
                         <div>
                           <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
@@ -816,7 +828,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                             <span className="text-gray-500 dark:text-gray-400 ml-2">Not available</span>
                           )}
                         </div>
-                        {result.payloadSent ? (
+                        {result.payloadSent ? ((): React.ReactNode => (
                           <div>
                             <button
                               type="button"
@@ -839,7 +851,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               </pre>
                             ) : null}
                           </div>
-                        ) : null}
+                        ))() : null}
                         {result.responseReceived ? (
                           <div>
                             <button
