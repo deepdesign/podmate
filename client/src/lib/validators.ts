@@ -1,4 +1,4 @@
-import type { CreateFromTemplateBody, TemplateVariant, UploadedFile } from './types';
+import type { CreateFromTemplateBody, TemplateVariant } from './types';
 
 export function validateProductCreation(
   body: CreateFromTemplateBody,

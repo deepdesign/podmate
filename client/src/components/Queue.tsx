@@ -23,7 +23,6 @@ type QueueProps = {
 export default function Queue({ template, images, selectedVariants, metadata, onComplete }: QueueProps) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
   const [tunnelStatus, setTunnelStatus] = useState<'unknown' | 'valid' | 'invalid'>('unknown');
@@ -56,7 +55,7 @@ export default function Queue({ template, images, selectedVariants, metadata, on
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [queue, isPaused, processItem]);
+  }, [queue, isPaused]);
 
   // Get tunnel URL on mount and periodically
   useEffect(() => {
@@ -155,7 +154,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
     }
 
     processingRef.current = true;
-    setIsProcessing(true);
     setCurrentIndex(itemIndex);
 
     // Get current item from state
@@ -163,7 +161,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
       const item = prev.find(q => q.index === itemIndex);
       if (!item || item.status !== 'pending') {
         processingRef.current = false;
-        setIsProcessing(false);
         setCurrentIndex(null);
         return prev;
       }
@@ -198,7 +195,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
                 error: `Failed to refresh URL: ${err instanceof Error ? err.message : 'Unknown error'}`,
               });
               processingRef.current = false;
-              setIsProcessing(false);
               setCurrentIndex(null);
               // Try next item
               setQueue(current => {
@@ -234,7 +230,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
               error: `No variants selected for image: ${updatedImage.originalName || updatedImage.fileId}`,
             });
             processingRef.current = false;
-            setIsProcessing(false);
             setCurrentIndex(null);
             // Try next item
             setQueue(current => {
@@ -327,7 +322,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
           }
         } finally {
           processingRef.current = false;
-          setIsProcessing(false);
           setCurrentIndex(null);
 
           // Process next item if queue is not paused
@@ -351,18 +345,6 @@ export default function Queue({ template, images, selectedVariants, metadata, on
     });
   }, [template, selectedVariants, metadata, needsUrlRefresh, refreshImageUrl, isPaused, onComplete]);
 
-  // Start processing queue
-  const startQueue = () => {
-    if (processingRef.current) return;
-    
-    setQueue(current => {
-      const firstPending = current.find(q => q.status === 'pending');
-      if (firstPending) {
-        processItem(firstPending.index);
-      }
-      return current;
-    });
-  };
 
   // Pause/resume
   const togglePause = () => {
@@ -386,7 +368,7 @@ export default function Queue({ template, images, selectedVariants, metadata, on
       const item = current.find(q => q.index === index);
       if (item && (item.status === 'error' || item.status === 'skipped')) {
         const updated = current.map(q => 
-          q.index === index ? { ...q, status: 'pending', error: undefined } : q
+          q.index === index ? { ...q, status: 'pending' as const, error: undefined } : q
         );
         // Remove from results if it was there (find by index)
         const queueIndex = current.findIndex(q => q.index === index);

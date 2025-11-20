@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { TemplateInfo, UploadedFile, VariantAssignment, PlaceholderAssignment } from '../lib/types';
+import type { TemplateInfo, UploadedFile, VariantAssignment } from '../lib/types';
 
 type MappingGridProps = {
   templates: TemplateInfo[];
@@ -146,7 +146,6 @@ export default function MappingGrid({
                   {selectedVariants.includes(variant.id) && (
                     <div className="space-y-2 ml-6">
                       {variant.placeholders.map((placeholder) => {
-                        const key = `${template.id}:${variant.id}:${placeholder.name}`;
                         const currentMapping = mapping.get(`${template.id}:${variant.id}`);
                         const assignedFile = currentMapping?.imagePlaceholders.find(
                           p => p.name === placeholder.name

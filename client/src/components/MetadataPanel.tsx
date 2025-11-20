@@ -17,7 +17,7 @@ export default function MetadataPanel({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isVisible, setIsVisible] = useState(true);
-  const [salesChannels, setSalesChannels] = useState<string[]>([]);
+  const [salesChannels] = useState<string[]>([]);
 
   useEffect(() => {
     onChange({

@@ -22,8 +22,17 @@ export default function Mapping() {
     }
   }, [navigate]);
 
-  const handleFilesAdded = (files: UploadedFile[]) => {
-    setUploadedFiles(prev => [...prev, ...files]);
+  const handleFilesAdded = (files: File[]) => {
+    // Convert File[] to UploadedFile[] - in a real implementation, these would need to be uploaded first
+    // For now, this is a type compatibility fix
+    const uploadedFiles: UploadedFile[] = files.map(file => ({
+      fileId: file.name,
+      publicUrl: URL.createObjectURL(file),
+      originalName: file.name,
+      file: file,
+      sourceType: 'local' as const,
+    }));
+    setUploadedFiles(prev => [...prev, ...uploadedFiles]);
   };
 
   const handleMappingChange = (newMapping: Map<string, VariantAssignment>) => {

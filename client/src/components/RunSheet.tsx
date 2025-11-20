@@ -19,7 +19,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
   const [expandedSections, setExpandedSections] = useState<Map<string, boolean>>(new Map());
   const [lastChecked, setLastChecked] = useState<Map<number, number>>(new Map()); // index -> timestamp
   const [autoChecking, setAutoChecking] = useState<Set<number>>(new Set()); // indices being auto-checked
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const toggleSection = (key: string) => {
     const newMap = new Map(expandedSections);
@@ -223,7 +223,6 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
     // 2. AND variants are populated (indicates images processed)
     const isReady = response.isReadyToPublish === true || (response.status !== 'created' && response.status !== undefined);
     const hasVariants = variantsCount > 0;
-    const hasImages = productImagesCount > 0;
     // Complete ONLY if ready AND has variants - this ensures variants are actually connected
     // Just having product images isn't enough - we need variants to be connected
     return isReady && hasVariants;
@@ -471,7 +470,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                           <>
                             <div className="flex-shrink-0">
                               <img
-                                src={image.thumbnailUrl || image.publicUrl || image.fileId}
+                                src={image.publicUrl || image.fileId}
                                 alt={image.originalName || image.fileId}
                                 className="h-12 w-12 object-cover rounded-md border border-gray-300 dark:border-gray-600"
                               />

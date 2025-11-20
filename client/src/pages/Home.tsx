@@ -30,7 +30,6 @@ export default function Home() {
   const [selectedCloudFilesCount, setSelectedCloudFilesCount] = useState(0);
   const [addCloudFilesHandler, setAddCloudFilesHandler] = useState<(() => Promise<void>) | null>(null);
   const [results, setResults] = useState<ProductCreationResult[]>([]);
-  const [creating, setCreating] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     current: number;
     total: number;
@@ -538,189 +537,6 @@ export default function Home() {
     setMetadata(newMetadata);
   };
 
-  const createProducts = async () => {
-    if (!template || images.length === 0) {
-      alert('No template or images selected');
-      return;
-    }
-
-    if (!metadata.description) {
-      alert('Description is required');
-      return;
-    }
-
-    setCreating(true);
-    const newResults: ProductCreationResult[] = [];
-    const totalImages = images.length;
-
-    // Create one product per image
-    for (let index = 0; index < images.length; index++) {
-      const image = images[index];
-      
-      // Update progress
-      setUploadProgress({
-        current: index + 1,
-        total: totalImages,
-        currentImageName: image.originalName || image.fileId,
-      });
-      const imageVariantIds = selectedVariants.get(image.fileId) || [];
-      
-      if (imageVariantIds.length === 0) {
-        newResults.push({
-          templateId: template.id,
-          status: 'error',
-          error: `No variants selected for image: ${image.originalName || image.fileId}`,
-        });
-        continue;
-      }
-
-      // Build variant assignments: map image to all placeholders in selected variants
-      const variantAssignments: VariantAssignment[] = [];
-      
-      for (const variantId of imageVariantIds) {
-        const variant = template.variants.find(v => v.id === variantId);
-        if (!variant) continue;
-
-        // Map the image to ALL placeholders in this variant
-        const placeholders: PlaceholderAssignment[] = variant.placeholders.map(placeholder => ({
-          name: placeholder.name,
-          fileUrl: image.publicUrl,
-          // fitMethod can be added if needed - defaults to 'slice' per API docs
-        }));
-
-        variantAssignments.push({
-          templateVariantId: variantId,
-          imagePlaceholders: placeholders,
-        });
-      }
-
-      // Generate title: if metadata.title (prefix) is provided, use "prefix - filename", else just filename
-      // Remove file extension and convert to Headline Case
-      const rawImageName = (image.originalName || image.fileId).replace(/\.[^/.]+$/, '');
-      const imageName = toHeadlineCase(rawImageName);
-      const productTitle = metadata.title 
-        ? `${metadata.title} - ${imageName}`
-        : imageName;
-
-      // Create product payload per API docs
-      // Both title and description are REQUIRED per API docs
-      const payload: CreateFromTemplateBody = {
-        templateId: template.id,
-        title: productTitle,
-        description: metadata.description || 'Product description', // Fallback if somehow empty
-        tags: metadata.tags,
-        isVisibleInTheOnlineStore: metadata.isVisibleInTheOnlineStore,
-        salesChannels: metadata.salesChannels,
-        variants: variantAssignments,
-      };
-
-      newResults.push({
-        templateId: template.id,
-        status: 'pending',
-        createdAt: Date.now(), // Track when upload started
-      });
-
-      setResults([...newResults]);
-
-      try {
-        // Official API response per docs: id, previewUrl, status, etc.
-        const response = await createFromTemplate(payload) as any;
-        
-        const resultIndex = newResults.length - 1;
-        // Check if response looks complete - product ID is critical
-        const hasProductId = response.id || response.productId;
-        
-        // Check if variants were sent
-        const variantsSent = payload.variants.length;
-        const totalPlaceholders = payload.variants.reduce((sum: number, v: VariantAssignment) => sum + v.imagePlaceholders.length, 0);
-        
-        // Check if Gelato actually processed the variants (response.variants should not be empty)
-        const variantsInResponse = Array.isArray(response.variants) ? response.variants.length : 0;
-        const productImagesInResponse = Array.isArray(response.productImages) ? response.productImages.length : 0;
-        
-        let status: 'success' | 'warning' = hasProductId ? 'success' : 'warning';
-        let warningMessage: string | undefined;
-        
-        if (!hasProductId) {
-          warningMessage = 'Product created but missing product ID in response. Check server logs for details.';
-        } else if (variantsSent === 0) {
-          status = 'warning';
-          warningMessage = `Product created but no variants were included (variants array was empty). Expected at least 1 variant.`;
-        } else if (totalPlaceholders === 0) {
-          status = 'warning';
-          warningMessage = `Product created but no image placeholders were included. Variants: ${variantsSent}, Placeholders: 0.`;
-        } else if (variantsInResponse === 0 && variantsSent > 0) {
-          // This is expected - Gelato processes images asynchronously
-          // Check if status indicates async processing
-          const isProcessing = response.status === 'created' && response.isReadyToPublish === false;
-          
-          if (isProcessing) {
-            // This is normal - Gelato is processing images in the background
-            status = 'success'; // Mark as success since product was created
-            warningMessage = `✅ Product created successfully! Images are being processed in the background by Gelato (this is normal and expected). 
-            
-            The empty variants array is expected at this stage. Gelato will:
-            1) Fetch your images from the provided URLs
-            2) Process and optimize them for each variant
-            3) Update the product with variants and thumbnails (usually takes 5-10 minutes)
-            
-            What to do:
-            • Wait 5-10 minutes for processing to complete
-            • Check your server logs for "✅ GELATO FETCH DETECTED" - this confirms Gelato accessed your images
-            • Refresh the Gelato dashboard - variants and thumbnails will appear automatically when ready
-            • Your product ID is: ${response.id || response.productId || 'N/A'}`;
-          } else {
-            // Unusual case - status doesn't indicate processing
-            status = 'warning';
-            warningMessage = `⚠️ Product created but variants array is empty and status doesn't indicate processing. Check server logs to see if Gelato fetched your images.`;
-          }
-        } else if (productImagesInResponse === 0 && totalPlaceholders > 0) {
-          status = 'warning';
-          warningMessage = `Product created but no product images in response (sent ${totalPlaceholders} placeholders). Images may still be processing, or Gelato couldn't fetch them.`;
-        } else {
-          // Product created successfully
-          // But still show info if variants/images are low
-          if (variantsInResponse < variantsSent) {
-            warningMessage = `Partial success: Sent ${variantsSent} variants but only ${variantsInResponse} were processed. Some images may have failed.`;
-          }
-        }
-        
-        newResults[resultIndex] = {
-          templateId: template.id,
-          status,
-          productId: response.id || response.productId || '',
-          previewUrl: response.previewUrl || '',
-          // Note: API docs show previewUrl but not adminUrl - check if it exists
-          adminUrl: response.adminUrl || response.externalId || '',
-          payloadSent: payload,
-          responseReceived: response,
-          imageUrlSent: image.publicUrl,
-          error: warningMessage,
-          createdAt: newResults[resultIndex]?.createdAt || Date.now(), // Preserve upload start time
-        };
-      } catch (err) {
-        const resultIndex = newResults.length - 1;
-        newResults[resultIndex] = {
-          templateId: template.id,
-          status: 'error',
-          error: err instanceof Error ? err.message : 'Unknown error',
-          errorDetails: err,
-          payloadSent: payload,
-          imageUrlSent: image.publicUrl,
-          createdAt: newResults[resultIndex]?.createdAt || Date.now(), // Preserve upload start time
-        };
-      }
-
-      setResults([...newResults]);
-
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    setCreating(false);
-    setUploadProgress(null); // Clear progress when done
-  };
-
   const handleRetry = async (index: number) => {
     const result = results[index];
     if (!result || result.status !== 'error' || !template) return;
@@ -870,6 +686,7 @@ export default function Home() {
         results: results,
       };
       try {
+        localStorage.setItem(historyKey, JSON.stringify(historyEntry));
         const existingHistory = JSON.parse(localStorage.getItem('podmate_upload_history') || '[]');
         existingHistory.push(historyEntry);
         // Keep only last 50 uploads in history
@@ -901,7 +718,6 @@ export default function Home() {
     setSelectedVariants(new Map());
     setMetadata({});
     setResults([]);
-    setCreating(false);
     setUploading(false);
     setUploadProgress(null);
   };
@@ -998,7 +814,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    disabled={currentStep === 1}
+                    disabled={false}
                     className="text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-gray-700"
                   >
                     ← Previous
@@ -1084,7 +900,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    disabled={currentStep === 1}
+                    disabled={false}
                     className="text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-gray-700"
                   >
                     ← Previous
@@ -1127,7 +943,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    disabled={currentStep === 1}
+                    disabled={false}
                     className="text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-gray-700"
                   >
                     ← Previous
@@ -1237,7 +1053,7 @@ export default function Home() {
                               </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                              {images.map((image, index) => {
+                              {images.map((image) => {
                                 // Generate product title the same way as in createProducts
                                 const rawImageName = (image.originalName || image.fileId).replace(/\.[^/.]+$/, '');
                                 const imageName = toHeadlineCase(rawImageName);
@@ -1317,7 +1133,6 @@ export default function Home() {
                     type="button"
                     onClick={handlePrevious}
                     disabled={
-                      currentStep === 1 ||
                       (results.length > 0 && !results.some(r => r.status === 'pending'))
                     }
                     className="text-gray-900 bg-white border border-gray-300 hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-gray-700"

@@ -1,3 +1,4 @@
+// @ts-ignore - node-fetch types are available but TypeScript can't find them
 import fetch from 'node-fetch';
 import { ENV } from '../util/env';
 import { log, error } from '../util/logger';

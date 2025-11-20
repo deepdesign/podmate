@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import type { UploadedFile } from '../lib/types';
 import { getCloudCredentials, saveCloudCredentials } from '../lib/storage';
 import { listDropboxFiles, getDropboxDownloadLink, listGoogleDriveFiles, getGoogleDriveDownloadLink, refreshDropboxToken } from '../lib/api';
@@ -31,7 +30,6 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
   const [dropboxFiles, setDropboxFiles] = useState<CloudFile[]>([]);
   const [dropboxFolders, setDropboxFolders] = useState<CloudFile[]>([]);
   const [googleDriveFiles, setGoogleDriveFiles] = useState<CloudFile[]>([]);
-  const [googleDriveFolders, setGoogleDriveFolders] = useState<CloudFile[]>([]);
   const [selectedCloudFiles, setSelectedCloudFiles] = useState<Set<string>>(new Set());
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
@@ -102,14 +100,6 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
     });
   };
   
-  const saveGoogleDriveFolderId = (folderId: string) => {
-    setCurrentGoogleDriveFolderId(folderId);
-    const creds = getCloudCredentials();
-    saveCloudCredentials({
-      ...creds,
-      googleDriveLastFolderId: folderId,
-    });
-  };
 
   // Check for OAuth errors from URL params
   useEffect(() => {
@@ -560,7 +550,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                     };
                     saveCloudCredentials(currentCredentials);
                     // Retry with new token
-                    result = await getDropboxDownloadLink(currentCredentials.dropboxAccessToken, file.path);
+                    result = await getDropboxDownloadLink(currentCredentials.dropboxAccessToken!, file.path);
                   } catch (refreshErr) {
                     console.error(`Failed to refresh token for ${file.name}:`, refreshErr);
                     continue; // Skip this file
@@ -1003,7 +993,10 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
                               <input
                                 type="checkbox"
                                 checked={selectedCloudFiles.has(file.id)}
-                                onChange={() => toggleFileSelection(file.id)}
+                                onChange={() => {
+                                  const fileIndex = googleDriveFiles.findIndex(f => f.id === file.id);
+                                  toggleFileSelection(file.id, fileIndex >= 0 ? fileIndex : 0);
+                                }}
                                 className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                               />
                             </td>

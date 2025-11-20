@@ -139,7 +139,7 @@ router.post('/list-files', async (req, res) => {
     let hasMore = true;
     
     while (hasMore) {
-      const response = await axios.post(
+      const response: { data: { entries?: any[]; has_more?: boolean; cursor?: string } } = await axios.post(
         cursor 
           ? 'https://api.dropboxapi.com/2/files/list_folder/continue'
           : 'https://api.dropboxapi.com/2/files/list_folder',

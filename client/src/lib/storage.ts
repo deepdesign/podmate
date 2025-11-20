@@ -1,4 +1,3 @@
-import type { TemplateInfo } from './types';
 
 export type SavedTemplate = {
   id: string;

@@ -66,7 +66,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [checkingStatus, setCheckingStatus] = useState<Set<number>>(new Set());
   const processingRef = useRef(false);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Track if queue has been initialized to prevent duplicate initialization
   const queueInitializedRef = useRef<Set<string>>(new Set());
