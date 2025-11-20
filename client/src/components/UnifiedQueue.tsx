@@ -1135,53 +1135,56 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                               );
                             })() : null}
 
-                            {item.imageUrlSent ? (
-                              <div className="mt-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                {/* Image URL Preview */}
-                                <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
-                                <div className="mt-2 space-y-2">
-                                  <div>
-                                    <a
-                                      href={item.imageUrlSent}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 break-all text-xs"
-                                    >
-                                      {item.imageUrlSent}
-                                    </a>
-                                    <span className="ml-2 text-gray-500 dark:text-gray-400 text-xs">(Click to test if accessible)</span>
-                                  </div>
-                                  <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-600">
-                                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">
-                                      Original Image Preview (verify it looks correct):
+                            {(() => {
+                              if (!item.imageUrlSent) return null;
+                              return (
+                                <div className="mt-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                  {/* Image URL Preview */}
+                                  <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
+                                  <div className="mt-2 space-y-2">
+                                    <div>
+                                      <a
+                                        href={item.imageUrlSent}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 break-all text-xs"
+                                      >
+                                        {item.imageUrlSent}
+                                      </a>
+                                      <span className="ml-2 text-gray-500 dark:text-gray-400 text-xs">(Click to test if accessible)</span>
                                     </div>
-                                    <div className="relative">
-                                      <img
-                                        src={item.imageUrlSent}
-                                        alt="Original uploaded image"
-                                        className="max-w-xs max-h-48 border border-gray-300 dark:border-gray-600 rounded"
-                                        onError={(e) => {
-                                          const target = e.target as HTMLImageElement;
-                                          target.style.display = 'none';
-                                          const errorDiv = document.createElement('div');
-                                          errorDiv.className = 'text-red-600 dark:text-red-400 text-sm p-2 bg-red-50 dark:bg-red-900/20 rounded';
-                                          errorDiv.textContent = '❌ Image failed to load - may be corrupted, expired, or URL inaccessible';
-                                          target.parentElement?.appendChild(errorDiv);
-                                        }}
-                                      />
+                                    <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-600">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">
+                                        Original Image Preview (verify it looks correct):
+                                      </div>
+                                      <div className="relative">
+                                        <img
+                                          src={item.imageUrlSent}
+                                          alt="Original uploaded image"
+                                          className="max-w-xs max-h-48 border border-gray-300 dark:border-gray-600 rounded"
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            const errorDiv = document.createElement('div');
+                                            errorDiv.className = 'text-red-600 dark:text-red-400 text-sm p-2 bg-red-50 dark:bg-red-900/20 rounded';
+                                            errorDiv.textContent = '❌ Image failed to load - may be corrupted, expired, or URL inaccessible';
+                                            target.parentElement?.appendChild(errorDiv);
+                                          }}
+                                        />
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                                    <strong>💡 Diagnostic Tips:</strong>
-                                    <ul className="list-disc list-inside mt-1 space-y-1">
-                                      <li>If this preview looks <strong>correct</strong> but Gelato shows black areas → Image is likely still processing (wait 5-10 min, then click "Check Status")</li>
-                                      <li>If this preview shows <strong>black areas</strong> → The original file may be corrupted or incomplete</li>
-                                      <li>If this preview <strong>fails to load</strong> → The URL may have expired or the file was deleted</li>
-                                    </ul>
+                                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                      <strong>💡 Diagnostic Tips:</strong>
+                                      <ul className="list-disc list-inside mt-1 space-y-1">
+                                        <li>If this preview looks <strong>correct</strong> but Gelato shows black areas → Image is likely still processing (wait 5-10 min, then click "Check Status")</li>
+                                        <li>If this preview shows <strong>black areas</strong> → The original file may be corrupted or incomplete</li>
+                                        <li>If this preview <strong>fails to load</strong> → The URL may have expired or the file was deleted</li>
+                                      </ul>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ) : null}
+                              ) as React.ReactNode;
+                            })()}
 
                             {/* Preview and Admin URLs */}
                             {item.gelatoStatus && (item.gelatoStatus.previewUrl || item.gelatoStatus.adminUrl) && (
