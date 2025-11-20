@@ -896,7 +896,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                             )}
                             
                             {/* Gelato Status Diagnostics */}
-                            {item.gelatoStatus && (() => {
+                            {item.gelatoStatus ? ((): React.ReactNode => {
                               const status = item.gelatoStatus;
                               const variants = Array.isArray(status.variants) ? status.variants : [];
                               const productImages = Array.isArray(status.productImages) ? status.productImages : [];
@@ -1132,7 +1132,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                                   )}
                                 </div>
                               );
-                            })()}
+                            })() : null}
 
                             {/* Image URL Preview */}
                             {item.imageUrlSent ? (
