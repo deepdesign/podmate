@@ -1164,7 +1164,6 @@ export default function Home() {
                   selectedVariants={selectedVariants}
                   metadata={metadata}
                   onComplete={() => {
-                    setCreating(false);
                     setUploadProgress(null);
                   }}
                   onPrevious={handlePrevious}

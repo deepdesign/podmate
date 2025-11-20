@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { UploadedFile } from '../lib/types';
 import { getCloudCredentials, saveCloudCredentials } from '../lib/storage';
 import { listDropboxFiles, getDropboxDownloadLink, listGoogleDriveFiles, getGoogleDriveDownloadLink, refreshDropboxToken } from '../lib/api';
 
@@ -369,7 +368,7 @@ export default function FileBrowser({ onFilesAdded, onCloudUrlsAdded, initialTab
               
               // Retry the request with new token
               console.log('Token refreshed, retrying file list...');
-              result = await listDropboxFiles(freshCredentials.dropboxAccessToken, currentDropboxPath);
+              result = await listDropboxFiles(freshCredentials.dropboxAccessToken!, currentDropboxPath);
             } catch (refreshErr) {
               console.error('Failed to refresh Dropbox token:', refreshErr);
               setError('Your Dropbox session expired. Please reconnect to Dropbox.');

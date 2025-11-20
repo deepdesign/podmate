@@ -217,7 +217,6 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
     const response = r.responseReceived as any;
     if (!response) return false;
     const variantsCount = Array.isArray(response.variants) ? response.variants.length : 0;
-    const productImagesCount = Array.isArray(response.productImages) ? response.productImages.length : 0;
     // Consider complete if:
     // 1. Status is ready (isReadyToPublish or status changed from "created")
     // 2. AND variants are populated (indicates images processed)
@@ -609,7 +608,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                         </div>
                         
                         {/* Diagnostic Messages - always visible when row is expanded */}
-                        {result.responseReceived && typeof result.responseReceived === 'object' && result.responseReceived !== null && (() => {
+                        {result.responseReceived && typeof result.responseReceived === 'object' && result.responseReceived !== null && ((): React.ReactNode => {
                           const response = result.responseReceived as any;
                           const variants = Array.isArray(response.variants) ? response.variants : [];
                           const productImages = Array.isArray(response.productImages) ? response.productImages : [];
@@ -770,6 +769,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                         <div>
                           <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
                           {result.imageUrlSent ? (
+                            <>
                             <div className="mt-1 space-y-2">
                               <div>
                                 <a
@@ -811,11 +811,12 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                                 </ul>
                               </div>
                             </div>
+                            </>
                           ) : (
                             <span className="text-gray-500 dark:text-gray-400 ml-2">Not available</span>
                           )}
                         </div>
-                        {result.payloadSent && (
+                        {result.payloadSent ? (
                           <div>
                             <button
                               type="button"
@@ -838,8 +839,8 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               </pre>
                             )}
                           </div>
-                        )}
-                        {result.responseReceived && (
+                        ) : null}
+                        {result.responseReceived ? (
                           <div>
                             <button
                               type="button"
@@ -862,7 +863,7 @@ export default function RunSheet({ results, images, onRetry, onStatusUpdate, sho
                               </pre>
                             )}
                           </div>
-                        )}
+                        ) : null}
                         {result.errorDetails && (
                           <div>
                             <strong className="text-red-600 dark:text-red-400">Error Details:</strong>

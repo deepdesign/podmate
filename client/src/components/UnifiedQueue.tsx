@@ -1135,7 +1135,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                             })()}
 
                             {/* Image URL Preview */}
-                            {item.imageUrlSent && (
+                            {item.imageUrlSent ? (
                               <div className="mt-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                                 <strong className="text-gray-900 dark:text-white">Image URL Sent:</strong>
                                 <div className="mt-2 space-y-2">
@@ -1180,7 +1180,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                                   </div>
                                 </div>
                               </div>
-                            )}
+                            ) : null}
 
                             {/* Preview and Admin URLs */}
                             {item.gelatoStatus && (item.gelatoStatus.previewUrl || item.gelatoStatus.adminUrl) && (
@@ -1237,7 +1237,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                                 </details>
                               )}
 
-                              {item.responseReceived && (
+                              {item.responseReceived ? (
                                 <details className="group">
                                   <summary className="flex items-center justify-between w-full p-3 text-sm font-medium text-left text-gray-900 bg-gray-100 border border-gray-200 rounded-t-lg cursor-pointer hover:bg-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700 transition-colors">
                                     <span>Response from Gelato</span>
@@ -1257,7 +1257,7 @@ export default function UnifiedQueue({ template, images, selectedVariants, metad
                                     </pre>
                                   </div>
                                 </details>
-                              )}
+                              ) : null}
 
                               {item.gelatoStatus && (
                                 <details className="group">
